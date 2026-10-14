@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Files</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff;--fg:#0b0c0e;--mut:#5b6068;--line:#d9dce1;--btn:#0b0c0e;--btnfg:#fff;--red:#d92d20;--hover:#f5f6f8;--ok:#127a3e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111214;--fg:#f2f3f5;--mut:#9aa0a8;--line:#2d3036;--btn:#f2f3f5;--btnfg:#111214;--red:#ff6b5e;--hover:#1a1c1f;--ok:#4ad080;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111214;--fg:#f2f3f5;--mut:#9aa0a8;--line:#2d3036;--btn:#f2f3f5;--btnfg:#111214;--red:#ff6b5e;--hover:#1a1c1f;--ok:#4ad080;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+h1{font:700 clamp(40px,9vw,64px)/1.05 "Space Grotesk",system-ui,sans-serif;letter-spacing:-.03em;margin:8px 0 28px}
+#drop{border:1px solid var(--line);padding:32px 20px;text-align:center;transition:background .15s}
+#drop.over{background:var(--hover);border-color:var(--fg)}
+#add{width:100%;max-width:520px;padding:26px 16px;font:700 22px "Space Grotesk",system-ui,sans-serif;letter-spacing:.06em;background:var(--btn);color:var(--btnfg);border:0;cursor:pointer}
+#add:hover{opacity:.88}#add:disabled{opacity:.5;cursor:wait}
+.hint{margin:14px 0 0;color:var(--mut);font-size:14px}
+#stats{display:flex;justify-content:center;gap:36px;margin-top:22px;flex-wrap:wrap}
+#stats div{text-align:center}#stats b{display:block;font:500 18px "IBM Plex Mono",monospace}
+#stats span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+#msg{min-height:22px;margin-top:14px;font-size:14px;text-align:center;color:var(--mut)}
+#msg.err{color:var(--red)}
+h2{font:700 30px "Space Grotesk",system-ui,sans-serif;letter-spacing:-.02em;margin:44px 0 14px}
+.list{border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:1fr 90px 150px auto;gap:12px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row.head{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:12px 18px}
+.name{font-weight:500;word-break:break-all;min-width:0}
+.meta{font-size:13px;color:var(--mut)}
+.acts{display:flex;gap:8px;justify-content:flex-end}
+.acts button{border:1px solid var(--fg);background:transparent;color:var(--fg);font:500 12px "IBM Plex Mono",monospace;letter-spacing:.06em;padding:9px 12px;cursor:pointer}
+.acts button:hover{background:var(--hover)}
+.acts .del{border-color:var(--red);color:var(--red)}
+.acts button:disabled{opacity:.5;cursor:wait}
+.empty{padding:36px 18px;text-align:center;color:var(--mut)}
+.bar{height:3px;background:var(--line);margin-top:6px}.bar i{display:block;height:100%;background:var(--ok);width:0}
+@media (max-width:640px){
+ .row{grid-template-columns:1fr auto;gap:4px 12px}.row.head{display:none}
+ .name{grid-column:1/-1}.sz{grid-row:2}.dt{grid-row:2;grid-column:1}
+ .sz{display:inline}.acts{grid-column:1/-1;justify-content:flex-start;margin-top:8px}
+ .acts button{flex:1;padding:12px}
+ .meta.sz::after{content:" · "}
+ .row .meta-wrap{display:flex}
+}
+</style>
+</head>
+<body>
+<main>
+ <div class="eyebrow mono">Cloud storage</div>
+ <h1>My Files</h1>
+
+ <section id="drop">
+  <button id="add" type="button">ADD FILES</button>
+  <input id="pick" type="file" multiple hidden>
+  <p class="hint">or drag and drop files here. Any type, any size.</p>
+  <div id="stats" class="mono">
+   <div><b id="sCount">0</b><span>Files stored</span></div>
+   <div><b id="sSize">0 KB</b><span>Total size</span></div>
+   <div><b id="sBusy">0</b><span>In progress</span></div>
+  </div>
+  <div id="msg" role="status"></div>
+ </section>
+
+ <h2>Your files</h2>
+ <div class="list" id="list"><div class="empty">Loading…</div></div>
+</main>
+
+<script>
+(function(){
+ var $=function(i){return document.getElementById(i)};
+ var pw=sessionStorage.getItem('pw')||'',items=[],busy=0;
+ var addBtn=$('add'),pick=$('pick'),list=$('list'),msg=$('msg');
+ function say(t,err){msg.textContent=t||'';msg.className=err?'err':''}
+ function fmt(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(n<10240?2:1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
+ function fdate(s){var d=new Date(s),p=function(x){return String(x).padStart(2,'0')};return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())}
+ function dname(k){return k.replace(/^files\/\d+-[0-9a-f]{6}-/,'')}
+ async function api(path,opt){
+  opt=opt||{};opt.headers=Object.assign({'x-password':pw,'Content-Type':'application/json'},opt.headers||{});
+  var r=await fetch(path,opt);
+  if(r.status===401){pw=prompt('Password:')||'';sessionStorage.setItem('pw',pw);if(pw){opt.headers['x-password']=pw;r=await fetch(path,opt)}}
+  var j=await r.json().catch(function(){return {}});
+  if(!r.ok)throw new Error(j.error||('Error '+r.status));
+  return j;
+ }
+ function render(){
+  $('sCount').textContent=items.length;
+  $('sSize').textContent=fmt(items.reduce(function(a,f){return a+f.size},0));
+  $('sBusy').textContent=busy;
+  list.textContent='';
+  if(!items.length){var e=document.createElement('div');e.className='empty';e.textContent='No files yet. Click ADD FILES to upload.';list.appendChild(e);return}
+  var h=document.createElement('div');h.className='row head mono';
+  ['File','Size','Uploaded','Actions'].forEach(function(t,i){var s=document.createElement('span');s.textContent=t;if(i==3)s.style.textAlign='right';h.appendChild(s)});
+  list.appendChild(h);
+  items.forEach(function(f){
+   var r=document.createElement('div');r.className='row';
+   var n=document.createElement('div');n.className='name';n.textContent=dname(f.key);
+   var s=document.createElement('div');s.className='meta mono sz';s.textContent=fmt(f.size);
+   var d=document.createElement('div');d.className='meta mono dt';d.textContent=fdate(f.date);
+   var a=document.createElement('div');a.className='acts';
+   var b1=document.createElement('button');b1.textContent='DOWNLOAD';b1.onclick=function(){download(f,b1)};
+   var b2=document.createElement('button');b2.textContent='DELETE';b2.className='del';b2.onclick=function(){remove(f,b2)};
+   a.appendChild(b1);a.appendChild(b2);
+   r.appendChild(n);r.appendChild(s);r.appendChild(d);r.appendChild(a);list.appendChild(r);
+  });
+ }
+ async function load(){try{items=await api('/api/files');render()}catch(e){list.textContent='';var el=document.createElement('div');el.className='empty';el.textContent='Could not load files: '+e.message;list.appendChild(el)}}
+ function put(url,file,onp){return new Promise(function(res,rej){
+  var x=new XMLHttpRequest();x.open('PUT',url);x.setRequestHeader('Content-Type',file.type||'application/octet-stream');
+  x.upload.onprogress=function(e){if(e.lengthComputable)onp(Math.round(e.loaded/e.total*100))};
+  x.onload=function(){x.status<300?res():rej(new Error('storage returned '+x.status))};
+  x.onerror=function(){rej(new Error('network/CORS error. Check the bucket CORS settings'))};
+  x.send(file)})}
+ async function upload(files){
+  files=Array.from(files);if(!files.length)return;
+  var fail=[],ok=0;addBtn.disabled=true;
+  for(var i=0;i<files.length;i++){
+   var f=files[i];busy++;render();
+   try{
+    var u=await api('/api/upload-url',{method:'POST',body:JSON.stringify({name:f.name,type:f.type})});
+    await put(u.url,f,function(p){say('Uploading '+f.name+' ('+(i+1)+' of '+files.length+') '+p+'%')});
+    ok++;
+   }catch(e){fail.push(f.name+' ('+e.message+')')}
+   busy--;
+  }
+  addBtn.disabled=false;
+  say(fail.length?'Could not upload: '+fail.join(', '):ok+' file'+(ok==1?'':'s')+' uploaded.',!!fail.length);
+  await load();
+ }
+ async function download(f,b){b.disabled=true;try{var r=await api('/api/download-url?key='+encodeURIComponent(f.key));location.href=r.url}catch(e){say('Download failed: '+e.message,true)}b.disabled=false}
+ async function remove(f,b){
+  if(!confirm('Delete "'+dname(f.key)+'" permanently?'))return;
+  b.disabled=true;
+  try{await api('/api/files?key='+encodeURIComponent(f.key),{method:'DELETE'});say('Deleted.');await load()}catch(e){say('Delete failed: '+e.message,true);b.disabled=false}
+ }
+ addBtn.onclick=function(){pick.click()};
+ pick.onchange=function(){upload(pick.files).then(function(){pick.value=''})};
+ var drop=$('drop');
+ ['dragenter','dragover'].forEach(function(t){drop.addEventListener(t,function(e){e.preventDefault();drop.classList.add('over')})});
+ ['dragleave','drop'].forEach(function(t){drop.addEventListener(t,function(e){e.preventDefault();drop.classList.remove('over')})});
+ drop.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files)upload(e.dataTransfer.files)});
+ load();
+})();
+</script>
+</body>
+</html>
